@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EarnFast - Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
+
+    <style>
+        body { 
+            background-color: #0f172a; 
+            color: white; 
+            font-family: 'Segoe UI', sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: 80px; /* Space for bottom nav */
+        }
+        .card { background: #1e293b; padding: 20px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 16px; }
+        .input-dark { 
+            background: #0f172a; 
+            border: 1px solid #334155; 
+            color: white; 
+            padding: 12px; 
+            border-radius: 10px; 
+            width: 100%; 
+            outline: none; 
+            transition: border-color 0.2s;
+            font-size: 14px;
+        }
+        .input-dark:focus { border-color: #3b82f6; }
+        .btn-primary { 
+            background: #2563eb; 
+            color: white; 
+            padding: 12px; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            cursor: pointer;
+            text-align: center;
+            width: 100%;
+        }
+        .btn-primary:active { transform: scale(0.98); }
+        
+        .btn-danger { background: #ef4444; color: white; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+        .btn-success { background: #22c55e; color: white; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+
+        /* Bottom Nav Styles */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid #334155;
+            display: flex; justify-content: space-around;
+            padding: 10px 0; z-index: 50;
+            padding-bottom: env(safe-area-inset-bottom, 10px);
+        }
+        .nav-btn {
+            display: flex; flex-direction: column; align-items: center;
+            color: #94a3b8; font-size: 10px; font-weight: 600;
+            transition: all 0.2s; background: none; border: none;
+        }
+        .nav-btn i { font-size: 20px; margin-bottom: 4px; }
+        .nav-btn.active { color: #3b82f6; }
+        .nav-btn.active i { transform: translateY(-2px); }
+
+        /* Toast */
+        #toast-container { position: fixed; top: 20px; left: 0; right: 0; z-index: 1000; display: flex; justify-content: center; pointer-events: none; }
+        .toast {
+            padding: 10px 20px; border-radius: 50px; color: white; font-weight: 600; font-size: 13px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px;
+            animation: slideDown 0.3s ease-out; pointer-events: auto;
+        }
+        .toast-success { background: #10b981; }
+        .toast-error { background: #ef4444; }
+        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .tab-view { display: none; animation: fadeIn 0.2s; }
+        .tab-view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="p-4">
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 z-[200] bg-black/90 hidden flex-col items-center justify-center p-4 backdrop-blur-sm">
+        <div class="card w-full max-w-sm text-center relative border border-slate-600">
+            <div class="w-14 h-14 rounded-full bg-slate-700 mx-auto flex items-center justify-center mb-4 text-2xl mt-[-40px] border-4 border-[#1e293b]">
+                <i id="confirm-icon" class="fas fa-question text-white"></i>
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2" id="confirm-title">Confirm</h3>
+            <p class="text-slate-400 text-xs mb-6 px-2" id="confirm-msg">Sure?</p>
+            <div class="flex gap-3">
+                <button onclick="closeConfirmModal()" class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl text-sm">Cancel</button>
+                <button onclick="executeAction()" id="confirm-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="fixed inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-50 p-6">
+        <div class="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg rotate-3"><i class="fas fa-shield-alt text-3xl text-white"></i></div>
+        <h1 class="text-2xl font-bold mb-8">Admin Panel</h1>
+        <div class="w-full max-w-sm space-y-4">
+            <input type="email" id="admin-email" placeholder="Email" class="input-dark">
+            <input type="password" id="admin-pass" placeholder="Password" class="input-dark">
+            <button onclick="adminLogin()" id="login-btn" class="btn-primary shadow-lg shadow-blue-900/20">Login</button>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD CONTAINER -->
+    <div id="dashboard" class="hidden max-w-md mx-auto">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-xl font-bold text-white">Dashboard</h1>
+                <p class="text-xs text-slate-400">Welcome Admin</p>
+            </div>
+            <button onclick="auth.signOut()" class="bg-slate-800 p-2 rounded-lg text-red-400 border border-slate-700"><i class="fas fa-power-off"></i></button>
+        </header>
+
+        <!-- TAB 1: HOME (Stats) -->
+        <div id="view-home" class="tab-view active">
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="card flex flex-col items-center justify-center p-4 bg-gradient-to-br from-slate-800 to-slate-900 !mb-0">
+                    <i class="fas fa-users text-blue-400 text-2xl mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white" id="live-users">0</h2>
+                    <p class="text-[10px] text-slate-400 uppercase font-bold">Active</p>
+                </div>
+                <div class="card flex flex-col items-center justify-center p-4 bg-gradient-to-br from-slate-800 to-slate-900 !mb-0">
+                    <i class="fas fa-clock text-green-400 text-2xl mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white" id="pending-count">0</h2>
+                    <p class="text-[10px] text-slate-400 uppercase font-bold">Pending</p>
+                </div>
+            </div>
+            
+            <div class="card border-l-4 border-blue-500">
+                <h3 class="font-bold text-sm mb-2 text-white">Quick Actions</h3>
+                <p class="text-xs text-slate-400 mb-3">Use the bottom menu to manage requests and settings.</p>
+            </div>
+        </div>
+
+        <!-- TAB 2: REQUESTS (Withdrawals) -->
+        <div id="view-requests" class="tab-view">
+            <h3 class="text-lg font-bold mb-4 text-white">Withdrawal Requests</h3>
+            <div id="withdrawals-list" class="space-y-3 pb-4">
+                <p class="text-center text-slate-500 text-sm py-10">Loading...</p>
+            </div>
+        </div>
+
+        <!-- TAB 3: SETTINGS (Rewards) -->
+        <div id="view-settings" class="tab-view">
+            <h3 class="text-lg font-bold mb-4 text-white">Reward Settings</h3>
+            <div class="space-y-3">
+                <div class="card !p-4">
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Refer Bonus</label>
+                    <input type="number" id="set-refer" class="input-dark">
+                </div>
+                <div class="card !p-4">
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Signup Bonus</label>
+                    <input type="number" id="set-signup" class="input-dark">
+                </div>
+                
+                <!-- Game Rewards Section -->
+                <div class="card !p-4 border-l-4 border-indigo-500">
+                    <h4 class="text-sm font-bold text-indigo-400 mb-3">Games Rewards</h4>
+                    
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Image Finder Reward</label>
+                    <input type="number" id="set-image-reward" class="input-dark mb-3">
+
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Tic Tac Toe Reward</label>
+                    <input type="number" id="set-ttt-reward" class="input-dark mb-3">
+
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Math Solve Reward</label>
+                    <input type="number" id="set-math-reward" class="input-dark">
+                </div>
+
+                <div class="card !p-4">
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Min Withdraw</label>
+                    <input type="number" id="set-min-withdraw" class="input-dark">
+                </div>
+                <div class="card !p-4">
+                    <label class="text-xs text-slate-400 font-bold block mb-1">Coin Value Text</label>
+                    <input type="text" id="set-coin-val" class="input-dark">
+                </div>
+                <button onclick="saveGlobalSettings()" id="save-settings-btn" class="btn-primary mt-4">Save Changes</button>
+            </div>
+        </div>
+
+        <!-- TAB 4: MORE (Config) -->
+        <div id="view-more" class="tab-view">
+            <h3 class="text-lg font-bold mb-4 text-white">Configuration</h3>
+            
+            <!-- Payment Methods -->
+            <div class="card">
+                <h4 class="font-bold text-sm text-green-400 mb-3">Payment Methods</h4>
+                <div class="flex gap-2 mb-3">
+                    <input type="text" id="new-payment-method" placeholder="Method Name" class="input-dark text-xs">
+                    <button onclick="addPaymentMethod()" class="bg-blue-600 text-white px-4 rounded-lg text-xs font-bold">Add</button>
+                </div>
+                <div id="payment-methods-list" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <!-- Social Links -->
+            <div class="card">
+                <h4 class="font-bold text-sm text-blue-400 mb-3">Social Links</h4>
+                <div class="space-y-2">
+                    <input type="text" id="link-telegram" class="input-dark text-xs" placeholder="Telegram URL">
+                    <input type="text" id="link-youtube" class="input-dark text-xs" placeholder="YouTube URL">
+                    <input type="text" id="link-instagram" class="input-dark text-xs" placeholder="Instagram URL">
+                </div>
+                <button onclick="saveSocials()" id="save-socials-btn" class="btn-primary mt-3 text-xs py-2">Update Links</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-nav hidden" id="bottom-nav">
+        <button onclick="switchTab('view-home', this)" class="nav-btn active">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </button>
+        <button onclick="switchTab('view-requests', this)" class="nav-btn">
+            <div class="relative">
+                <i class="fas fa-list"></i>
+                <span id="nav-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full hidden"></span>
+            </div>
+            <span>Requests</span>
+        </button>
+        <button onclick="switchTab('view-settings', this)" class="nav-btn">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </button>
+        <button onclick="switchTab('view-more', this)" class="nav-btn">
+            <i class="fas fa-bars"></i>
+            <span>More</span>
+        </button>
+    </nav>
+
+    <script>
+        // UPDATED FIREBASE CONFIGURATION
+        const firebaseConfig = {
+          apiKey: "apna",
+          authDomain: "apna",
+          databaseURL: "apna",
+          projectId: "apna",
+          storageBucket: "apna",
+          messagingSenderId: "apna",
+          appId: "apna"
+        };
+        const appId = "apna";
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const rtdb = firebase.database();
+
+        let currentSettings = {};
+        let pendingAction = null;
+
+        // AUTH
+        function adminLogin() {
+            const btn = document.getElementById('login-btn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const e = document.getElementById('admin-email').value;
+            const p = document.getElementById('admin-pass').value;
+            
+            auth.signInWithEmailAndPassword(e, p)
+                .then(() => { showToast("Success", "success"); })
+                .catch(err => { btn.innerText = "Login"; showToast(err.message, "error"); });
+        }
+
+        auth.onAuthStateChanged(user => {
+            if(user) {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('bottom-nav').classList.remove('hidden'); // Show Nav
+                initAdmin();
+            } else {
+                document.getElementById('login-screen').classList.remove('hidden');
+                document.getElementById('dashboard').classList.add('hidden');
+                document.getElementById('bottom-nav').classList.add('hidden'); // Hide Nav
+            }
+        });
+
+        // TABS LOGIC
+        function switchTab(viewId, btnElement) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
+            // Show selected tab
+            document.getElementById(viewId).classList.add('active');
+            
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            if(btnElement) btnElement.classList.add('active');
+            
+            // Scroll to top
+            window.scrollTo(0, 0);
+        }
+
+        // INIT
+        function initAdmin() {
+            loadSettings();
+            listenLiveUsers();
+            listenWithdrawals();
+        }
+
+        // --- SETTINGS ---
+        function loadSettings() {
+            db.doc(`artifacts/${appId}/public/data/settings/global`).onSnapshot(doc => {
+                if(doc.exists) {
+                    const d = doc.data();
+                    currentSettings = d;
+                    document.getElementById('set-refer').value = d.referralBonus || 500;
+                    document.getElementById('set-signup').value = d.signupBonus || 100;
+                    document.getElementById('set-image-reward').value = d.gameReward || 10;
+                    
+                    // NEW: Load TicTacToe and Math rewards
+                    document.getElementById('set-ttt-reward').value = d.tttReward || 10;
+                    document.getElementById('set-math-reward').value = d.mathReward || 10;
+                    
+                    document.getElementById('set-min-withdraw').value = d.minWithdraw || 100;
+                    document.getElementById('set-coin-val').value = d.coinValue || "₹1";
+                    
+                    if(d.socials) {
+                        document.getElementById('link-telegram').value = d.socials.telegram || "";
+                        document.getElementById('link-youtube').value = d.socials.youtube || "";
+                        document.getElementById('link-instagram').value = d.socials.instagram || "";
+                    }
+                    renderPaymentMethods(d.paymentMethods || []);
+                }
+            });
+        }
+
+        async function saveGlobalSettings() {
+            const btn = document.getElementById('save-settings-btn');
+            btn.innerHTML = 'Saving...';
+            btn.disabled = true;
+
+            const updates = {
+                referralBonus: parseInt(document.getElementById('set-refer').value),
+                signupBonus: parseInt(document.getElementById('set-signup').value),
+                gameReward: parseInt(document.getElementById('set-image-reward').value),
+                
+                // NEW: Save TicTacToe and Math rewards
+                tttReward: parseInt(document.getElementById('set-ttt-reward').value),
+                mathReward: parseInt(document.getElementById('set-math-reward').value),
+                
+                minWithdraw: parseInt(document.getElementById('set-min-withdraw').value),
+                coinValue: document.getElementById('set-coin-val').value
+            };
+            try {
+                await db.doc(`artifacts/${appId}/public/data/settings/global`).set(updates, {merge: true});
+                showToast("Saved!", "success");
+            } catch(e) { showToast("Error", "error"); } 
+            finally { btn.innerHTML = 'Save Changes'; btn.disabled = false; }
+        }
+
+        async function saveSocials() {
+            const btn = document.getElementById('save-socials-btn');
+            btn.innerText = "...";
+            const socials = {
+                telegram: document.getElementById('link-telegram').value,
+                youtube: document.getElementById('link-youtube').value,
+                instagram: document.getElementById('link-instagram').value
+            };
+            try {
+                await db.doc(`artifacts/${appId}/public/data/settings/global`).set({socials}, {merge: true});
+                showToast("Links Updated", "success");
+            } catch(e) { showToast("Error", "error"); }
+            btn.innerText = "Update Links";
+        }
+
+        // --- PAYMENT METHODS ---
+        function renderPaymentMethods(methods) {
+            const container = document.getElementById('payment-methods-list');
+            container.innerHTML = '';
+            methods.forEach(m => {
+                const tag = document.createElement('div');
+                tag.className = "bg-slate-700 px-3 py-1 rounded text-xs flex items-center gap-2 border border-slate-600";
+                tag.innerHTML = `${m} <button onclick="removePaymentMethod('${m}')" class="text-red-400 font-bold ml-1">&times;</button>`;
+                container.appendChild(tag);
+            });
+        }
+
+        async function addPaymentMethod() {
+            const val = document.getElementById('new-payment-method').value.trim();
+            if(!val) return;
+            const current = currentSettings.paymentMethods || [];
+            if(current.includes(val)) return;
+            try {
+                await db.doc(`artifacts/${appId}/public/data/settings/global`).set({paymentMethods: [...current, val]}, {merge: true});
+                showToast("Added", "success");
+                document.getElementById('new-payment-method').value = '';
+            } catch(e) {}
+        }
+
+        async function removePaymentMethod(val) {
+            if(!confirm(`Remove ${val}?`)) return;
+            const current = currentSettings.paymentMethods || [];
+            const updated = current.filter(m => m !== val);
+            try {
+                await db.doc(`artifacts/${appId}/public/data/settings/global`).update({paymentMethods: updated});
+            } catch(e) {}
+        }
+
+        // --- LIVE STATS ---
+        function listenLiveUsers() {
+            rtdb.ref('/status').on('value', snap => {
+                document.getElementById('live-users').innerText = snap.numChildren();
+            });
+        }
+
+        // --- WITHDRAWALS ---
+        function listenWithdrawals() {
+            db.collection(`artifacts/${appId}/public/data/withdrawals`)
+              .where('status', '==', 'pending')
+              .onSnapshot(snap => {
+                  const count = snap.size;
+                  document.getElementById('pending-count').innerText = count;
+                  
+                  // Update Nav Badge
+                  const badge = document.getElementById('nav-badge');
+                  if(count > 0) { badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
+
+                  const list = document.getElementById('withdrawals-list');
+                  list.innerHTML = '';
+                  if(snap.empty) { list.innerHTML = '<p class="text-center text-slate-500 text-xs italic">No pending requests</p>'; return; }
+                  
+                  snap.forEach(doc => {
+                      const d = doc.data();
+                      const id = doc.id;
+                      const div = document.createElement('div');
+                      div.className = "bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-sm flex flex-col gap-3";
+                      div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-bold text-sm text-white">${d.userName}</p>
+                                <p class="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded inline-block mt-1">${d.method}</p>
+                            </div>
+                            <p class="text-sm text-yellow-400 font-bold">🪙 ${d.amount}</p>
+                        </div>
+                        <div class="bg-black/20 p-2 rounded text-[11px] font-mono text-slate-400 break-all border border-white/5">${d.details}</div>
+                        <div class="flex gap-2">
+                            <button onclick="openActionModal('${id}', 'paid')" class="btn-success flex-1 text-center py-2">Pay</button>
+                            <button onclick="openActionModal('${id}', 'rejected')" class="btn-danger flex-1 text-center py-2">Reject</button>
+                        </div>
+                      `;
+                      list.appendChild(div);
+                  });
+              });
+        }
+
+        // --- MODAL & ACTIONS ---
+        function openActionModal(id, status) {
+            pendingAction = { id, status };
+            const title = document.getElementById('confirm-title');
+            const msg = document.getElementById('confirm-msg');
+            const btn = document.getElementById('confirm-btn');
+            
+            if (status === 'paid') {
+                title.innerText = "Approve Payment?";
+                msg.innerText = "Mark as PAID?";
+                btn.className = "flex-1 bg-green-600 text-white font-bold py-3 rounded-xl text-sm";
+            } else {
+                title.innerText = "Reject Request?";
+                msg.innerText = "Refund coins to user?";
+                btn.className = "flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-sm";
+            }
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            document.getElementById('confirm-modal').classList.add('flex');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            document.getElementById('confirm-modal').classList.remove('flex');
+            pendingAction = null;
+        }
+
+        async function executeAction() {
+            if (!pendingAction) return;
+            const { id, status } = pendingAction;
+            const btn = document.getElementById('confirm-btn');
+            btn.innerText = "...";
+            btn.disabled = true;
+
+            try {
+                const ref = db.collection(`artifacts/${appId}/public/data/withdrawals`).doc(id);
+                const snap = await ref.get();
+                if (!snap.exists) throw new Error("Not found");
+
+                await ref.update({status});
+                showToast(status === 'rejected' ? "Rejected & Refunded" : "Paid Successfully", "success");
+            } catch(e) { showToast(e.message, "error"); }
+            finally { closeConfirmModal(); btn.disabled = false; }
+        }
+
+        // --- TOAST ---
+        function showToast(msg, type) {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = `toast ${type === 'success' ? 'toast-success' : 'toast-error'}`;
+            t.innerHTML = `<span>${msg}</span>`;
+            c.appendChild(t);
+            setTimeout(() => {
+                t.style.opacity = '0';
+                setTimeout(() => t.remove(), 300);
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
