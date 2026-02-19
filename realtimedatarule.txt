@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "status": {
+      // सभी लॉग-इन यूज़र्स लिस्ट पढ़ सकते हैं (ताकि Active Count दिखे)
+      ".read": "auth != null",
+      
+      "$uid": {
+        // यूज़र सिर्फ अपनी एंट्री लिख/हटा सकता है, दूसरों की नहीं
+        ".write": "auth != null && $uid === auth.uid",
+        
+        // डेटा वैलिडेशन: यह सुनिश्चित करता है कि फालतू डेटा न आए
+        ".validate": "newData.hasChildren(['state', 'last_changed'])"
+      }
+    }
+  }
+}
