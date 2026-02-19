@@ -113,8 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     onValue(statusRef, (snap) => {
-      setActiveUsers(snap.numChildren());
-    });
+  const val = snap.val();
+  setActiveUsers(val ? Object.keys(val).length : 0);
+});
   }, []);
 
   // Init user data
@@ -358,4 +359,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   return useContext(AuthContext);
-                }
+}
